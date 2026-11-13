@@ -1,0 +1,103 @@
+[
+    {
+        "iconUrl": "http://new.circleftp.net/static/media/logo.fce2c9029060a10687b8.png",
+        "fileHash": "sha256-6c7b1c4a639d3e12e9db7fd6d6322eb213bf329867f083a5001acf3cae27f8a1",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
+        "fileSize": 20812,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Mamun015"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "Documentary",
+            "Others"
+        ],
+        "version": 1,
+        "internalName": "BdixCircleftp",
+        "description": "Circle FTP (BDIX). Movies and TV series from new.circleftp.net. Works only on a BDIX line.",
+        "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixCircleftp.cs3",
+        "name": "BdixCircleftp"
+    },
+    {
+        "iconUrl": "https://movies.discoveryftp.net/assets/images/icon.png",
+        "fileHash": "sha256-cb983e7459e2c8e55696cf26bad38058241198f8cf8b8a69072d4f7924ff1e88",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
+        "fileSize": 27426,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Mamun015"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "AsianDrama",
+            "Cartoon",
+            "Documentary"
+        ],
+        "version": 1,
+        "internalName": "BdixDflix",
+        "description": "Dflix (BDIX). Movies and TV series from movies.discoveryftp.net. Works only on a BDIX line.",
+        "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixDflix.cs3",
+        "name": "BdixDflix"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/Mamun015/Mamun015-Zangetsu/main/logo.png",
+        "fileHash": "sha256-99291908f38bd6ea5a1aa755f0d9120e4981c94ca0039f527909c53c454ba7eb",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
+        "fileSize": 30229,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Mamun015"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "Cartoon",
+            "AsianDrama",
+            "Documentary",
+            "Others"
+        ],
+        "version": 1,
+        "internalName": "BdixDhakaFlix",
+        "description": "DhakaFlix (BDIX). Movies, TV series and anime from BDIX DhakaFlix servers. Works only on a BDIX line.",
+        "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixDhakaFlix.cs3",
+        "name": "BdixDhakaFlix"
+    },
+    {
+        "iconUrl": "http://10.16.100.244/images/logo-purple.svg",
+        "fileHash": "sha256-9a82051bc5aa8339ece0e5b445c6d6fa98ea074afc04e62dea7e37fd22f8dae6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
+        "fileSize": 17194,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Mamun015"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "Documentary",
+            "Others"
+        ],
+        "version": 1,
+        "internalName": "BdixICCFtp",
+        "description": "ICC Ftp (BDIX). Movies and TV series from http://10.16.100.244/. Works only on a BDIX line.",
+        "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixICCFtp.cs3",
+        "name": "BdixICCFtp"
+    }
+]
