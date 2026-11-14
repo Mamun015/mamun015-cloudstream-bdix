@@ -51,10 +51,10 @@
     },
     {
         "iconUrl": "https://raw.githubusercontent.com/Mamun015/Mamun015-Zangetsu/main/logo.png",
-        "fileHash": "sha256-d5aca104b4c972fdb0ce8fef9d8bab63f6aa19419e43a956f85aca21ff04194f",
+        "fileHash": "sha256-568bfe321155bc46590f4828cb0658c99af9059ffe81e2c5a7546c691e5b5454",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
-        "fileSize": 38556,
+        "fileSize": 38514,
         "status": 1,
         "language": "bn",
         "authors": [
@@ -70,7 +70,7 @@
             "Documentary",
             "Others"
         ],
-        "version": 4,
+        "version": 5,
         "internalName": "BdixDhakaFlix",
         "description": "DhakaFlix (BDIX). Movies, TV series and anime from BDIX DhakaFlix servers. Works only on a BDIX line.",
         "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixDhakaFlix.cs3",
