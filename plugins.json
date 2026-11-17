@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "http://new.circleftp.net/static/media/logo.fce2c9029060a10687b8.png",
-        "fileHash": "sha256-6c7b1c4a639d3e12e9db7fd6d6322eb213bf329867f083a5001acf3cae27f8a1",
+        "fileHash": "sha256-bd3c543a605608de320c631e8b25f1d45e4ed8f413959307624218c163063c28",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
-        "fileSize": 20812,
+        "fileSize": 21039,
         "status": 1,
         "language": "bn",
         "authors": [
@@ -17,7 +17,7 @@
             "Documentary",
             "Others"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "BdixCircleftp",
         "description": "Circle FTP (BDIX). Movies and TV series from new.circleftp.net. Works only on a BDIX line.",
         "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixCircleftp.cs3",
@@ -78,10 +78,10 @@
     },
     {
         "iconUrl": "http://10.16.100.244/images/logo-purple.svg",
-        "fileHash": "sha256-9a82051bc5aa8339ece0e5b445c6d6fa98ea074afc04e62dea7e37fd22f8dae6",
+        "fileHash": "sha256-9a0dfc759bc42b05c69c12406befa215fdb89f6e46f271c073b68dded442972a",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
-        "fileSize": 17194,
+        "fileSize": 18052,
         "status": 1,
         "language": "bn",
         "authors": [
@@ -94,7 +94,7 @@
             "Documentary",
             "Others"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "BdixICCFtp",
         "description": "ICC Ftp (BDIX). Movies and TV series from http://10.16.100.244/. Works only on a BDIX line.",
         "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/BdixICCFtp.cs3",
