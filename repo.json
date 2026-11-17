@@ -1,6 +1,6 @@
 {
   "name": "🇧🇩 Mamun015 BDIX Repository",
-  "description": "Bangladesh BDIX sources for Cloudstream: DhakaFlix, Circle FTP, Dflix, ICC FTP. Works only on BDIX-connected networks.",
+  "description": "BDIX and Bangladeshi sources for Cloudstream: DhakaFlix, Circle FTP, Dflix, ICC FTP, MovieNestBD. The BDIX plugins need a BDIX line; MovieNestBD works on any network.",
   "manifestVersion": 1,
   "pluginLists": [
     "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/plugins.json"
