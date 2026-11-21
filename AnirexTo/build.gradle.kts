@@ -1,11 +1,10 @@
 // Anirex (public website). Anime streaming with sub/dub via embed iframes.
-version = 2
-
 android {
     namespace = "com.mamun.bdix"
 }
 
 cloudstream {
+    version = 2
     description = "Anime from anirex.to with sub/dub support. Works on any network."
     authors = listOf("Mamun015")
 
