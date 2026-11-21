@@ -135,10 +135,16 @@ class AnirexToProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val parts = data.split("/")
-        if (parts.size != 2) return false
-        val slug = parts[0]
-        val epNum = parts[1].toIntOrNull() ?: return false
+        val slug: String
+        val epNum: Int
+
+        if (data.contains("/")) {
+            val parts = data.split("/", limit = 2)
+            slug = parts[0]
+            epNum = parts[1].toIntOrNull() ?: parts[1].substringAfterLast("/").toIntOrNull() ?: return false
+        } else {
+            return false
+        }
 
         val anime = app.get("$apiUrl/anime/$slug", headers = HEADERS, timeout = TIMEOUT)
             .parsed<AnimeSingleWrapper>().data ?: return false
@@ -146,8 +152,7 @@ class AnirexToProvider : MainAPI() {
 
         val watch = app.get("$apiUrl/v1/watch/$anilistId/$epNum", headers = HEADERS, timeout = TIMEOUT)
             .parsed<WatchDTO>() ?: return false
-        val servers = watch.servers ?: return false
-        if (servers.isEmpty()) return false
+        val servers = watch.servers ?: emptyList()
 
         val referer = "$mainUrl/watch/$slug/$epNum"
         var count = 0
@@ -159,7 +164,6 @@ class AnirexToProvider : MainAPI() {
                 newExtractorLink(name, label, playerUrl) {
                     this.type = ExtractorLinkType.VIDEO
                     this.referer = referer
-                    this.quality = 720
                     this.headers = mapOf(
                         "User-Agent" to USER_AGENT,
                         "Referer" to referer,
