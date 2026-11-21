@@ -91,11 +91,13 @@ class AnirexToProvider : MainAPI() {
         val title = anime.titleEnglish ?: anime.titleRomaji ?: return null
 
         val episodes = app.get("$apiUrl/anime/$slug/episodes?per_page=2500", headers = HEADERS, timeout = TIMEOUT)
-            .parsed<EpisodeListWrapper>().data.map { ep ->
-                newEpisode("$slug/${ep.episodeNumber}") {
-                    this.name = ep.title ?: "Episode ${ep.episodeNumber}"
+            .parsed<EpisodeListWrapper>().data
+            .mapNotNull { ep ->
+                val num = ep.episodeNumber ?: return@mapNotNull null
+                newEpisode("$slug/$num") {
+                    this.name = ep.title ?: "Episode $num"
                     this.season = 1
-                    this.episode = ep.episodeNumber
+                    this.episode = num
                 }
             }
 
@@ -143,17 +145,19 @@ class AnirexToProvider : MainAPI() {
         val anilistId = anime.anilistId ?: anime.id ?: return false
 
         val watch = app.get("$apiUrl/v1/watch/$anilistId/$epNum", headers = HEADERS, timeout = TIMEOUT)
-            .parsed<WatchDTO>()
+            .parsed<WatchDTO>() ?: return false
+        val servers = watch.servers ?: return false
+        if (servers.isEmpty()) return false
 
         val referer = "$mainUrl/watch/$slug/$epNum"
         var count = 0
-        for (server in watch.servers) {
+        for (server in servers) {
             val playerUrl = server.playerUrl ?: continue
             val label = if (server.audio?.lowercase() in listOf("dub", "english"))
                 "Anirex [DUB]" else "Anirex [SUB]"
             callback(
                 newExtractorLink(name, label, playerUrl) {
-                    this.type = ExtractorLinkType.VIDEO
+                    this.type = ExtractorLinkType.EXTERNAL
                     this.referer = referer
                     this.quality = 720
                     this.headers = mapOf(
