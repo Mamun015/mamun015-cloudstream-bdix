@@ -157,7 +157,7 @@ class AnirexToProvider : MainAPI() {
                 "Anirex [DUB]" else "Anirex [SUB]"
             callback(
                 newExtractorLink(name, label, playerUrl) {
-                    this.type = ExtractorLinkType.EXTERNAL
+                    this.type = ExtractorLinkType.VIDEO
                     this.referer = referer
                     this.quality = 720
                     this.headers = mapOf(
