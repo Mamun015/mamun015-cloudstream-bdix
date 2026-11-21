@@ -160,8 +160,12 @@ class AnirexToProvider : MainAPI() {
             val playerUrl = server.playerUrl ?: continue
             val label = if (server.audio?.lowercase() in listOf("dub", "english"))
                 "Anirex [DUB]" else "Anirex [SUB]"
+
+            // flixcloud.cc/e/ পেজের ভীতরে আসল ভিডিও URL খুঁজে বের করি
+            val actualUrl = resolveVideoUrl(playerUrl) ?: playerUrl
+
             callback(
-                newExtractorLink(name, label, playerUrl) {
+                newExtractorLink(name, label, actualUrl) {
                     this.type = ExtractorLinkType.VIDEO
                     this.referer = referer
                     this.headers = mapOf(
@@ -173,6 +177,31 @@ class AnirexToProvider : MainAPI() {
             count++
         }
         return count > 0
+    }
+
+    // flixcloud এমবেড পেজ থেকে আসল ভিডিও স্ট্রিম URL বের করা
+    private suspend fun resolveVideoUrl(pageUrl: String): String? {
+        val page = app.get(pageUrl, headers = HEADERS, timeout = TIMEOUT).text ?: return null
+
+        // .m3u8 হ্লস লিংক খোঁজা
+        val m3u8 = Regex("""https?://[^"'\s<>]+\\.m3u8[^"'\s<>]*""").find(page)?.value
+        if (m3u8 != null) return m3u8
+
+        // সরাসরি ভিডিও ফাইল (.mp4, .mkv, .ts)
+        val videoFile = Regex("""https?://[^"'\s<>]+\\.(mp4|mkv|ts|m3u8)[^"'\s<>]*""").find(page)?.value
+        if (videoFile != null) return videoFile
+
+        // fetch8.flixcloud.cc স্ট্রিম পথ খোঁজা
+        val fetch8 = Regex("""https?://fetch8\.flixcloud\.cc/[^"'\s<>]+""").find(page)?.value
+        if (fetch8 != null) return fetch8
+
+        // video_id থেকে স্ট্রিম URL গড়া (ফলব্যাক)
+        val videoId = Regex("""video_id["']?\s*:\s*["']([^"']+)["']""").find(page)?.groupValues?.get(1)
+        if (videoId != null) {
+            return "https://fetch8.flixcloud.cc/stream/$videoId"
+        }
+
+        return null
     }
 
     // --- Helpers -------------------------------------------------------------

@@ -4,7 +4,7 @@ android {
 }
 
 cloudstream {
-    version = 2
+    version = 3
     description = "Anime from anirex.to with sub/dub support. Works on any network."
     authors = listOf("Mamun015")
 
