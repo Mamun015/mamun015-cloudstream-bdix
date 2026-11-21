@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://anirex.to/images/fav.png",
-        "fileHash": "sha256-1cff7d45972cd868c3b9669472b9fe034e3bbf745b508a4195ebb7df004e785c",
+        "fileHash": "sha256-2d86989ca7e05f3d05d8c0b3639d8ea5bbcea6d69fcbc8f623b71ca4eae440b1",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
-        "fileSize": 20638,
+        "fileSize": 20637,
         "status": 1,
         "language": "en",
         "authors": [
@@ -20,7 +20,7 @@
             "Special",
             "Others"
         ],
-        "version": -1,
+        "version": 2,
         "internalName": "AnirexTo",
         "description": "Anime from anirex.to with sub/dub support. Works on any network.",
         "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/AnirexTo.cs3",
