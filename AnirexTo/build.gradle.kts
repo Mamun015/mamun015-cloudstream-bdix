@@ -1,5 +1,5 @@
 // Anirex (public website). Anime streaming with sub/dub via embed iframes.
-version = 1.1
+version = 2
 
 android {
     namespace = "com.mamun.bdix"
