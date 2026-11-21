@@ -20,10 +20,10 @@ import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.fasterxml.jackson.databind.ObjectMapper
+import java.net.URLEncoder
 
 /**
- * AnirexTo — Anime from anirex.to with sub/dub via embed iframes.
+ * AnirexTo — anime from anirex.to with sub/dub via embed iframes.
  *
  * API:
  *   GET /api/v1/homepage                 -> homepage feed
@@ -42,41 +42,32 @@ class AnirexToProvider : MainAPI() {
     override val hasDownloadSupport = false
 
     override val supportedTypes = setOf(
-        TvType.Movie,
-        TvType.TvSeries,
         TvType.Anime,
         TvType.AnimeMovie,
-        TvType.OVA,
-        TvType.ONA,
-        TvType.Special,
-        TvType.Others,
+        TvType.TvSeries,
+        TvType.Movie,
     )
 
     override val mainPage: List<MainPageData>
         get() = mainPageOf(
             "featured" to "Featured",
-            "latest" to "Latest Episodes",
+            "latestEpisodes" to "Latest Episodes",
             "trending" to "Trending",
-            "new" to "New On Site",
-            "upcoming" to "Upcoming",
         )
 
     // --- Homepage ------------------------------------------------------------
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page > 1) return newHomePageResponse(request.name, emptyList(), false)
-        val body = fetchText("$apiUrl/v1/homepage?featuredLimit=5&latestLimit=14&trendingLimit=24&newLimit=14&upcomingLimit=14")
-        val wrapper = mapper.readValue(body, HomepageWrapper::class.java)
+        val rows = app.get("$apiUrl/v1/homepage", headers = HEADERS, timeout = TIMEOUT)
+            .parsed<HomepageDTO>().data ?: emptyMap()
         val items = when (request.data) {
-            "featured" -> wrapper.data.featured
-            "latest" -> wrapper.data.latestEpisodes
-            "trending" -> wrapper.data.trending
-            "new" -> wrapper.data.newOnSite
-            "upcoming" -> wrapper.data.upcoming
+            "featured" -> rows["featured"]
+            "latestEpisodes" -> rows["latestEpisodes"]
+            "trending" -> rows["trending"]
             else -> null
-        }
-        val parsed = items?.mapNotNull { it.toSearch() } ?: emptyList()
-        return newHomePageResponse(request.name, parsed, false)
+        } ?: return newHomePageResponse(request.name, emptyList(), false)
+        return newHomePageResponse(request.name, items.mapNotNull { it.toSearch() }, false)
     }
 
     // --- Search --------------------------------------------------------------
@@ -84,56 +75,53 @@ class AnirexToProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val term = query.trim()
         if (term.isEmpty()) return emptyList()
-        val body = fetchText("$apiUrl/search?q=${encode(term)}&sort=popularity&page=1&per_page=28")
-        val wrapper = mapper.readValue(body, AnimeListWrapper::class.java)
-        return wrapper.data.mapNotNull { it.toSearch() }
+        val data = app.get(
+            "$apiUrl/search?q=${encode(term)}&sort=popularity&page=1&per_page=28",
+            headers = HEADERS, timeout = TIMEOUT,
+        ).parsed<SearchDTO>().data
+        return data.mapNotNull { it.toSearch() }
     }
 
-    // --- Load (Detail) -------------------------------------------------------
+    // --- Load ----------------------------------------------------------------
 
     override suspend fun load(url: String): LoadResponse? {
         val slug = slugFromUrl(url) ?: return null
-        val infoBody = fetchText("$apiUrl/anime/$slug")
-        val infoWrapper = mapper.readValue(infoBody, AnimeSingleWrapper::class.java)
-        val anime = infoWrapper.data ?: return null
-
+        val anime = app.get("$apiUrl/anime/$slug", headers = HEADERS, timeout = TIMEOUT)
+            .parsed<AnimeSingleWrapper>().data ?: return null
         val title = anime.titleEnglish ?: anime.titleRomaji ?: return null
-        val epBody = fetchText("$apiUrl/anime/$slug/episodes?per_page=2500")
-        val epWrapper = mapper.readValue(epBody, EpisodeListWrapper::class.java)
 
-        val poster = anime.coverImageUrl
-        val plot = anime.description?.takeIf { it.isNotBlank() }
-        val score = anime.averageScore?.let { Score.from10(it / 10.0) }
-        val year = anime.seasonYear
-        val genres = anime.genres ?: emptyList()
-        val type = anime.format.toAnirexTvType() ?: TvType.Anime
-        val status = anime.status.toAnirexStatus()
-
-        if (epWrapper.data.isNotEmpty()) {
-            val episodes = epWrapper.data.map { ep ->
+        val episodes = app.get("$apiUrl/anime/$slug/episodes?per_page=2500", headers = HEADERS, timeout = TIMEOUT)
+            .parsed<EpisodeListWrapper>().data.map { ep ->
                 newEpisode("$slug/${ep.episodeNumber}") {
                     this.name = ep.title ?: "Episode ${ep.episodeNumber}"
                     this.season = 1
                     this.episode = ep.episodeNumber
                 }
             }
-            return newTvSeriesLoadResponse(title, url, type, episodes) {
+
+        val poster = anime.coverImageUrl
+        val plot = anime.description?.takeIf { it.isNotBlank() }
+        val score = anime.averageScore?.let { Score.from10(it / 10.0) }
+        val year = anime.seasonYear
+        val genres = anime.genres ?: emptyList()
+        val type = anime.toTvType()
+
+        return if (episodes.isNotEmpty()) {
+            newTvSeriesLoadResponse(title, url, type, episodes) {
                 this.posterUrl = poster
                 this.plot = plot
                 this.year = year
                 this.score = score
                 this.tags = genres
-                this.status = status
             }
-        }
-
-        return newMovieLoadResponse(title, url, type, slug) {
-            this.posterUrl = poster
-            this.plot = plot
-            this.year = year
-            this.score = score
-            this.tags = genres
-            this.status = status
+        } else {
+            newMovieLoadResponse(title, url, type, slug) {
+                this.posterUrl = poster
+                this.plot = plot
+                this.year = year
+                this.score = score
+                this.tags = genres
+            }
         }
     }
 
@@ -150,24 +138,19 @@ class AnirexToProvider : MainAPI() {
         val slug = parts[0]
         val epNum = parts[1].toIntOrNull() ?: return false
 
-        val infoBody = fetchText("$apiUrl/anime/$slug")
-        val infoWrapper = mapper.readValue(infoBody, AnimeSingleWrapper::class.java)
-        val anime = infoWrapper.data ?: return false
+        val anime = app.get("$apiUrl/anime/$slug", headers = HEADERS, timeout = TIMEOUT)
+            .parsed<AnimeSingleWrapper>().data ?: return false
         val anilistId = anime.anilistId ?: anime.id ?: return false
 
-        val watchBody = fetchText("$apiUrl/v1/watch/$anilistId/$epNum")
-        val watch = mapper.readValue(watchBody, WatchResponse::class.java)
-        val servers = watch.servers ?: return false
+        val watch = app.get("$apiUrl/v1/watch/$anilistId/$epNum", headers = HEADERS, timeout = TIMEOUT)
+            .parsed<WatchDTO>()
 
         val referer = "$mainUrl/watch/$slug/$epNum"
         var count = 0
-        for (server in servers) {
+        for (server in watch.servers) {
             val playerUrl = server.playerUrl ?: continue
-            val audio = server.audio?.lowercase() ?: ""
-            val label = when {
-                audio in listOf("dub", "english") -> "Anirex [DUB]"
-                else -> "Anirex [SUB]"
-            }
+            val label = if (server.audio?.lowercase() in listOf("dub", "english"))
+                "Anirex [DUB]" else "Anirex [SUB]"
             callback(
                 newExtractorLink(name, label, playerUrl) {
                     this.type = ExtractorLinkType.FRAME
@@ -186,46 +169,82 @@ class AnirexToProvider : MainAPI() {
 
     // --- Helpers -------------------------------------------------------------
 
-    private fun slugFromUrl(url: String): String? {
-        val trimmed = url.trimEnd('/')
-        val parts = trimmed.split("/")
-        return parts.lastOrNull { it.isNotBlank() && it.matches(Regex("^[a-z][a-z0-9-]+\\d+$")) }
+    private fun slugFromUrl(url: String): String? =
+        url.trimEnd('/').split("/").lastOrNull {
+            it.isNotBlank() && it.matches(Regex("^[a-z][a-z0-9-]+\\d+$"))
+        }
+
+    private fun encode(text: String): String =
+        URLEncoder.encode(text, "UTF-8").replace("+", "%20")
+
+    private fun AnimeDTO.toSearch(): SearchResponse? {
+        val title = titleEnglish ?: titleRomaji ?: return null
+        val slug = slug ?: return null
+        return newAnimeSearchResponse(title, "$mainUrl/anime/$slug", toTvType()) {
+            this.posterUrl = coverImageUrl
+            this.year = seasonYear
+            this.score = averageScore?.let { Score.from10(it / 10.0) }
+        }
     }
 
-    private suspend fun fetchText(url: String): String =
-        app.get(url, headers = HEADERS, timeout = TIMEOUT).text
-
-    private fun encode(value: String): String =
-        java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-
-    private fun SearchAnime.toSearch(): SearchResponse? {
-        val title = this.titleEnglish ?: this.titleRomaji ?: return null
-        val slug = this.slug ?: return null
-        val poster = this.coverImageUrl
-        val type = this.format.toAnirexTvType() ?: TvType.Anime
-        return newAnimeSearchResponse(title, "$mainUrl/anime/$slug", type) {
-            this.posterUrl = poster
-            this.year = this@toSearch.seasonYear
-            this.score = this@toSearch.averageScore?.let { Score.from10(it / 10.0) }
-        }
+    private fun AnimeDTO.toTvType(): TvType = when (format) {
+        "TV" -> TvType.TvSeries
+        "MOVIE" -> TvType.Movie
+        "OVA", "SPECIAL" -> TvType.AnimeMovie
+        "ONA" -> TvType.Anime
+        else -> TvType.Anime
     }
 
     private companion object {
         const val TIMEOUT = 20L
         const val apiUrl = "https://anirex.to/api"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
-
-        val HEADERS = mapOf(
-            "User-Agent" to USER_AGENT,
-            "Accept" to "application/json",
-        )
-        val mapper = ObjectMapper()
+        val HEADERS = mapOf("User-Agent" to USER_AGENT)
     }
 }
 
-// --- JSON wrapper classes (simple, not in models file to avoid clashes) -------
+// --- JSON wrappers --------------------------------------------------------------
 
-data class HomepageWrapper(val data: HomepageData)
+data class AnimeDTO(
+    val id: Int? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("anilist_id") val anilistId: Int? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("title_romaji") val titleRomaji: String? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("title_english") val titleEnglish: String? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("cover_image_url") val coverImageUrl: String? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("banner_image_url") val bannerImageUrl: String? = null,
+    val format: String? = null,
+    val status: String? = null,
+    val genres: List<String>? = null,
+    val slug: String? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("average_score") val averageScore: Int? = null,
+    val description: String? = null,
+    @com.fasterxml.jackson.annotation.JsonProperty("season_year") val seasonYear: Int? = null,
+)
+
 data class AnimeSingleWrapper(val data: AnimeDTO?)
-data class AnimeListWrapper(val data: List<SearchAnime>)
+
+data class HomepageDTO(
+    val success: Boolean? = null,
+    val data: Map<String, List<AnimeDTO>>? = null,
+)
+
+data class SearchDTO(
+    val success: Boolean? = null,
+    val data: List<AnimeDTO> = emptyList(),
+)
+
 data class EpisodeListWrapper(val data: List<EpisodeDTO>)
+
+data class EpisodeDTO(
+    @com.fasterxml.jackson.annotation.JsonProperty("episode_number") val episodeNumber: Int? = null,
+    val title: String? = null,
+)
+
+data class WatchDTO(
+    val servers: List<WatchServerDTO> = emptyList(),
+)
+
+data class WatchServerDTO(
+    @com.fasterxml.jackson.annotation.JsonProperty("player_url") val playerUrl: String? = null,
+    val audio: String? = null,
+)
