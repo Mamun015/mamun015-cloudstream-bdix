@@ -1,5 +1,32 @@
 [
     {
+        "iconUrl": "https://anirex.to/images/fav.png",
+        "fileHash": "sha256-51a27fc64e93ca56ad4ec23dbc0246545ad496b0e6c1e719939b1dd445264acf",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
+        "fileSize": 20569,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "Mamun015"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "ONA",
+            "Special",
+            "Others"
+        ],
+        "version": 1,
+        "internalName": "AnirexTo",
+        "description": "Anime from anirex.to with sub/dub support. Works on any network.",
+        "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/AnirexTo.cs3",
+        "name": "AnirexTo"
+    },
+    {
         "iconUrl": "http://new.circleftp.net/static/media/logo.fce2c9029060a10687b8.png",
         "fileHash": "sha256-bd3c543a605608de320c631e8b25f1d45e4ed8f413959307624218c163063c28",
         "apiVersion": 1,
