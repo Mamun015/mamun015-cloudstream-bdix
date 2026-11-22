@@ -51,7 +51,9 @@ object FlixCloud {
         val salt = node.optString(sha256hex(token + "key").substring(0, 10)).b64() ?: return null
 
         val wasm = wasmB64.b64() ?: return null
-        val key = Integer.parseInt(seed.substring(0, 8), 16)
+        // Seed prefixes above 0x7FFFFFFF overflow Int.parseInt, so parse as Long
+        // and keep the low 32 bits: the module's _s(k) expects an i32.
+        val key = seed.substring(0, 8).toLong(16).toInt()
         val mixed = WasmModule(wasm).mix(frag1, frag2, salt, key) ?: return null
 
         val derived = pbkdf2(mixed, seed.toByteArray(), 1000, 32)
