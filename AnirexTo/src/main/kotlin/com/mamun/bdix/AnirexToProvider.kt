@@ -15,6 +15,7 @@ import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -135,16 +136,10 @@ class AnirexToProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val slug: String
-        val epNum: Int
-
-        if (data.contains("/")) {
-            val parts = data.split("/", limit = 2)
-            slug = parts[0]
-            epNum = parts[1].toIntOrNull() ?: parts[1].substringAfterLast("/").toIntOrNull() ?: return false
-        } else {
-            return false
-        }
+        val parts = data.split("/", limit = 2)
+        if (parts.size != 2) return false
+        val slug = parts[0]
+        val epNum = parts[1].toIntOrNull() ?: return false
 
         val anime = app.get("$apiUrl/anime/$slug", headers = HEADERS, timeout = TIMEOUT)
             .parsed<AnimeSingleWrapper>().data ?: return false
@@ -154,23 +149,27 @@ class AnirexToProvider : MainAPI() {
             .parsed<WatchDTO>() ?: return false
         val servers = watch.servers ?: emptyList()
 
-        val referer = "$mainUrl/watch/$slug/$epNum"
         var count = 0
         for (server in servers) {
             val playerUrl = server.playerUrl ?: continue
-            val label = if (server.audio?.lowercase() in listOf("dub", "english"))
-                "Anirex [DUB]" else "Anirex [SUB]"
+            val resolved = FlixCloud.resolve(playerUrl) ?: continue
 
-            // flixcloud.cc/e/ পেজের ভীতরে আসল ভিডিও URL খুঁজে বের করি
-            val actualUrl = resolveVideoUrl(playerUrl) ?: playerUrl
+            resolved.subtitles.forEach { (lang, url) ->
+                subtitleCallback(newSubtitleFile(lang, url))
+            }
 
+            val isHls = resolved.url.contains(".m3u8", ignoreCase = true)
             callback(
-                newExtractorLink(name, label, actualUrl) {
-                    this.type = ExtractorLinkType.VIDEO
-                    this.referer = referer
+                newExtractorLink(
+                    name,
+                    "Anirex [" + (server.audio?.uppercase() ?: "SUB") + "]",
+                    resolved.url,
+                ) {
+                    this.type = if (isHls) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    this.referer = "https://flixcloud.cc/"
                     this.headers = mapOf(
                         "User-Agent" to USER_AGENT,
-                        "Referer" to referer,
+                        "Referer" to "https://flixcloud.cc/",
                     )
                 }
             )
@@ -179,30 +178,6 @@ class AnirexToProvider : MainAPI() {
         return count > 0
     }
 
-    // flixcloud এমবেড পেজ থেকে আসল ভিডিও স্ট্রিম URL বের করা
-    private suspend fun resolveVideoUrl(pageUrl: String): String? {
-        val page = app.get(pageUrl, headers = HEADERS, timeout = TIMEOUT).text ?: return null
-
-        // .m3u8 হ্লস লিংক খোঁজা
-        val m3u8 = Regex("""https?://[^"'\s<>]+\\.m3u8[^"'\s<>]*""").find(page)?.value
-        if (m3u8 != null) return m3u8
-
-        // সরাসরি ভিডিও ফাইল (.mp4, .mkv, .ts)
-        val videoFile = Regex("""https?://[^"'\s<>]+\\.(mp4|mkv|ts|m3u8)[^"'\s<>]*""").find(page)?.value
-        if (videoFile != null) return videoFile
-
-        // fetch8.flixcloud.cc স্ট্রিম পথ খোঁজা
-        val fetch8 = Regex("""https?://fetch8\.flixcloud\.cc/[^"'\s<>]+""").find(page)?.value
-        if (fetch8 != null) return fetch8
-
-        // video_id থেকে স্ট্রিম URL গড়া (ফলব্যাক)
-        val videoId = Regex("""video_id["']?\s*:\s*["']([^"']+)["']""").find(page)?.groupValues?.get(1)
-        if (videoId != null) {
-            return "https://fetch8.flixcloud.cc/stream/$videoId"
-        }
-
-        return null
-    }
 
     // --- Helpers -------------------------------------------------------------
 
