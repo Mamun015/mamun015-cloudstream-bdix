@@ -20,7 +20,8 @@ object FlixCloud {
 
     data class Resolved(val url: String, val subtitles: List<Pair<String, String>>)
 
-    suspend fun resolve(embedUrl: String): Resolved? = runCatching {
+    suspend fun resolve(embedUrl: String): Resolved? {
+        return runCatching {
         val html = app.get(embedUrl, headers = HEADERS, timeout = TIMEOUT).text
 
         val seed = Regex("obfuscation_seed:\"([0-9a-f]+)\"").find(html)
@@ -32,7 +33,7 @@ object FlixCloud {
         val a = chain(e)
 
         fun field(name: String): String? =
-            Regex("\"?${Regex.escape(name)}\"?\\s*:\\s*\"([^\"]+)\""")
+            Regex("\"?${Regex.escape(name)}\"?\\s*:\\s*\"([^\"]+)\"")
                 .find(html)?.groupValues?.get(1)
 
         val frag1 = field("kf_" + e.substring(8, 16))?.b64() ?: return null
@@ -62,6 +63,7 @@ object FlixCloud {
 
         Resolved(url, subtitles(html))
     }.getOrNull()
+    }
 
     private fun chain(value: String): String {
         var s = value
