@@ -1,11 +1,10 @@
-// MovieNestBD (public website). Server rendered listings, jiofiles/xcloud HLS.
-version = 2
-
+// MovieNestBD (public website). Server rendered listings, xcloud worker HLS.
 android {
     namespace = "com.mamun.bdix"
 }
 
 cloudstream {
+    version = 3
     description = "MovieNestBD. Movies, web series and anime in many languages, with direct HLS links."
     authors = listOf("Mamun015")
 

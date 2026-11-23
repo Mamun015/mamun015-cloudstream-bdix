@@ -282,58 +282,128 @@ class MovieNestBDProvider : MainAPI() {
         for (result in resolved) result.second.forEach { subs.putIfAbsent(it.url, it) }
         subs.values.forEach { subtitleCallback(it) }
 
+        val seen = HashSet<String>()
         var count = 0
         for (result in resolved) {
-            val link = result.first ?: continue
-            callback(link)
-            count++
+            for (link in result.first) {
+                if (!seen.add(link.url)) continue
+                callback(link)
+                count++
+            }
         }
         return count > 0
     }
 
-    private suspend fun resolve(id: String, label: String): Pair<ExtractorLink?, List<SubtitleFile>> {
-        var streamUrl: String? = null
+    private suspend fun resolve(id: String, label: String): Pair<List<ExtractorLink>, List<SubtitleFile>> {
         try {
             val playerText = app.get("$mainUrl/player/$id", headers = HEADERS, timeout = TIMEOUT).text
-            streamUrl = IFRAME_SRC.find(playerText)?.groupValues?.get(1)?.let { absolute(it) }
+            var streamUrl = IFRAME_SRC.find(playerText)?.groupValues?.get(1)?.let { absolute(it) }
             if (streamUrl.isNullOrEmpty()) {
-                val direct = app.get("https://embed.jiofiles.pics/$id", headers = HEADERS, timeout = TIMEOUT).text
-                streamUrl = STREAM_URL.find(unescape(direct))?.value
+                val embed = app.get("https://embed.jiofiles.pics/$id", headers = HEADERS, timeout = TIMEOUT).text
+                streamUrl = STREAM_URL.find(unescape(embed))?.value
             }
-            if (streamUrl.isNullOrEmpty()) return null to emptyList()
+            if (streamUrl.isNullOrEmpty()) return emptyList<ExtractorLink>() to emptyList()
 
-            val page = unescape(app.get(streamUrl, headers = HEADERS, timeout = TIMEOUT).text)
-            val drive = DRIVE_ID.find(page)?.groupValues?.get(1)
-            val pool = WORKERS.find(page)?.groupValues?.get(1)?.let { WORKER_URL.find(it)?.value?.trimEnd('/') }
-            val directHls = HLS_URL.find(page)?.groupValues?.get(1)
+            // The xcloud player host sits behind a Cloudflare rule that answers a
+            // plain HTTP/1.1 request with "Just a moment". r.jina.ai reads it over
+            // its own connection and hands the raw html back, so every fetch goes
+            // direct first and falls back to that proxy.
+            val page = playerPage(streamUrl) ?: return emptyList<ExtractorLink>() to emptyList()
 
-            val hls = directHls ?: run {
-                if (drive.isNullOrEmpty() || pool.isNullOrEmpty()) return null to emptyList()
-                val body = MAPPER.writeValueAsString(mapOf("driveid" to drive))
-                    .toRequestBody(JSON_MEDIA)
-                val answer = app.post(
-                    "$pool/api/encode", requestBody = body, headers = HEADERS, timeout = TIMEOUT
-                ).text
-                val node = runCatching { MAPPER.readTree(answer) }.getOrNull() ?: return null to emptyList()
-                if (node.path("status").asText() != "success") return null to emptyList()
-                node.get("hls")?.asText()?.takeIf { it.isNotBlank() } ?: return null to emptyList()
+            val listed = directPlaylist(page)?.let { listOf(Playable(it, null, true)) }
+                ?: encodeSources(page)
+                ?: return emptyList<ExtractorLink>() to emptyList()
+
+            val links = listed.mapNotNull { source ->
+                runCatching {
+                    newExtractorLink(
+                        source = name,
+                        name = listOfNotNull(source.quality, label.ifEmpty { null }).joinToString(" · ")
+                            .ifEmpty { name },
+                        url = source.url,
+                        // The worker answers with an HLS master playlist that has no
+                        // .m3u8 suffix, so the type cannot be guessed from the url.
+                        type = if (source.hls) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
+                    ) {
+                        this.headers = HEADERS
+                    }
+                }.getOrNull()
             }
-
-            val link = newExtractorLink(
-                source = name,
-                name = label.ifEmpty { name },
-                url = hls,
-                // The worker returns an HLS master playlist with no .m3u8 suffix.
-                // Cloudstream only builds an HLS media source for M3U8 links; VIDEO
-                // makes ExoPlayer parse the playlist as a media container (error 3003).
-                type = ExtractorLinkType.M3U8,
-            ) {
-                this.headers = HEADERS
-            }
-            return link to subtitles(page)
+            return links to subtitles(page)
         } catch (e: Exception) {
-            return null to emptyList()
+            return emptyList<ExtractorLink>() to emptyList()
         }
+    }
+
+    /** Player html, direct when possible, through r.jina.ai when Cloudflare answers. */
+    private suspend fun playerPage(url: String): String? {
+        val direct = runCatching {
+            unescape(app.get(url, headers = HEADERS, timeout = TIMEOUT).text)
+        }.getOrNull()
+        if (direct != null && hasPlayerData(direct) && !BLOCK_PAGE.containsMatchIn(direct)) return direct
+
+        val proxied = runCatching {
+            unescape(app.get(PROXY + url, headers = PROXY_HEADERS, timeout = PROXY_TIMEOUT).text)
+        }.getOrNull() ?: return null
+        return proxied.takeIf { hasPlayerData(it) }
+    }
+
+    private fun hasPlayerData(html: String): Boolean = PLAYER_DATA.containsMatchIn(html)
+
+    private fun directPlaylist(page: String): String? {
+        val found = HLS_URL.find(page)?.groupValues?.get(1)
+            ?: PHOTOS_HLS.find(page)?.groupValues?.get(1)
+        return found?.trim()?.takeUnless { it.isEmpty() || it == "null" }
+    }
+
+    /**
+     * The encode worker answers either
+     *   { "status": "success", "hls": "https://.../hls/<token>" }
+     * or, on newer builds, a per quality map
+     *   { "status": "success", "video": { "1080p": "https://...mp4", ... } }
+     * Workers change per title, so they are tried in the page's own order.
+     */
+    private suspend fun encodeSources(page: String): List<Playable>? {
+        val drive = DRIVE_ID.find(page)?.groupValues?.get(1)?.trim()
+            ?.takeUnless { it.isEmpty() } ?: return null
+        val block = WORKERS.find(page)?.groupValues?.get(1) ?: return null
+        val workers = WORKER_URL.findAll(block)
+            .map { unescape(it.value).trimEnd('/') }
+            .distinct()
+            .take(MAX_WORKERS)
+            .toList()
+        if (workers.isEmpty()) return null
+
+        val body = MAPPER.writeValueAsString(mapOf("driveid" to drive)).toRequestBody(JSON_MEDIA)
+        for (worker in workers) {
+            val answer = runCatching {
+                app.post("$worker/api/encode", requestBody = body, headers = HEADERS, timeout = TIMEOUT).text
+            }.getOrNull() ?: continue
+            val node = runCatching { MAPPER.readTree(answer) }.getOrNull() ?: continue
+            if (node.path("status").asText() != "success") continue
+
+            val out = mutableListOf<Playable>()
+            val video = node.get("video")
+            if (video != null && video.isObject) {
+                video.fieldNames().forEach { quality ->
+                    val url = video.get(quality)?.asText()?.trim()
+                    if (!url.isNullOrEmpty()) {
+                        out.add(Playable(url, quality.uppercase(), url.contains(".m3u8", true)))
+                    }
+                }
+            }
+            if (out.isEmpty()) {
+                for (field in PLAYLIST_FIELDS) {
+                    val url = node.get(field)?.asText()?.trim()
+                    if (!url.isNullOrEmpty() && url != "null") {
+                        out.add(Playable(url, null, true))
+                        break
+                    }
+                }
+            }
+            if (out.isNotEmpty()) return out
+        }
+        return null
     }
 
     private suspend fun subtitles(page: String): List<SubtitleFile> {
@@ -375,6 +445,23 @@ class MovieNestBDProvider : MainAPI() {
         val JSON_MEDIA = "application/json".toMediaType()
         val MAPPER = ObjectMapper()
 
+        const val PROXY = "https://r.jina.ai/"
+        const val PROXY_TIMEOUT = 40L
+        const val MAX_WORKERS = 3
+
+        val PROXY_HEADERS = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+            "X-Return-Format" to "html",
+            "Accept" to "text/html,application/xhtml+xml",
+        )
+        val BLOCK_PAGE = Regex(
+            """just a moment|cf-mitigated|attention required|enable javascript and cookies|cf_chl""",
+            RegexOption.IGNORE_CASE,
+        )
+        val PLAYER_DATA = Regex("""encodedDriveId|workerPools|hlsUrl|photosHlsUrl""")
+        val PLAYLIST_FIELDS = listOf("hls", "url", "stream")
+
         val YEAR = Regex("""\b(19|20)\d{2}\b""")
         val ID24 = Regex("""[a-zA-Z0-9]{24}""")
         val EMBED_ID = Regex("""(?:embed|player)\.jiofiles\.pics/([a-zA-Z0-9]{24})""")
@@ -387,7 +474,11 @@ class MovieNestBDProvider : MainAPI() {
         val WORKERS = Regex("""workerPools\s*:\s*\[([^\]]*)\]""")
         val WORKER_URL = Regex("""https:[^"',\s]+""")
         val HLS_URL = Regex("""hlsUrl\s*:\s*"([^"]+)""")
+        val PHOTOS_HLS = Regex("""photosHlsUrl\s*:\s*"([^"]+)""")
         val SUBS = Regex("""(?s)rawSubs\s*:\s*\[(.*?)\]""")
         val SUB_ENTRY = Regex("""(?s)\{\s*"id"\s*:\s*(\d+).*?"lang"\s*:\s*"([^"]*)"""")
     }
+
+    /** One playable url from the worker: a playlist (hls) or a direct file. */
+    private data class Playable(val url: String, val quality: String?, val hls: Boolean)
 }
