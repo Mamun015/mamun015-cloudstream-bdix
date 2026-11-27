@@ -4,7 +4,7 @@ android {
 }
 
 cloudstream {
-    version = 4
+    version = 5
     description = "MovieNestBD. Movies, web series and anime in many languages, with direct HLS links."
     authors = listOf("Mamun015")
 

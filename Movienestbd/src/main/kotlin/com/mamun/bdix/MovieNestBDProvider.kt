@@ -27,9 +27,6 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Document
@@ -275,22 +272,23 @@ class MovieNestBDProvider : MainAPI() {
         }.distinctBy { it.first }
         if (entries.isEmpty()) return false
 
-        val resolved = coroutineScope {
-            entries.map { (id, label) -> async { resolve(id, label) } }.awaitAll()
-        }
-        val subs = linkedMapOf<String, SubtitleFile>()
-        for (result in resolved) result.second.forEach { subs.putIfAbsent(it.url, it) }
-        subs.values.forEach { subtitleCallback(it) }
-
+        // One media id at a time: the encode worker misses its Google fetch when
+        // several drives are asked for at once, which is what makes a link that
+        // "worked on the site" fail in the app. The first verified link wins.
         val seen = HashSet<String>()
+        val seenSubs = linkedMapOf<String, SubtitleFile>()
         var count = 0
-        for (result in resolved) {
-            for (link in result.first) {
+        for ((id, label) in entries) {
+            val (links, subs) = resolve(id, label)
+            subs.forEach { seenSubs.putIfAbsent(it.url, it) }
+            for (link in links) {
                 if (!seen.add(link.url)) continue
                 callback(link)
                 count++
             }
+            if (count > 0) break
         }
+        seenSubs.values.forEach { subtitleCallback(it) }
         return count > 0
     }
 
