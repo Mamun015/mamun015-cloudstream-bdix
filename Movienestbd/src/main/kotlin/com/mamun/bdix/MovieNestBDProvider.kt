@@ -310,9 +310,13 @@ class MovieNestBDProvider : MainAPI() {
             // direct first and falls back to that proxy.
             val page = playerPage(streamUrl) ?: return emptyList<ExtractorLink>() to emptyList()
 
-            val listed = directPlaylist(page)?.let { listOf(Playable(it, null, true)) }
-                ?: encodeSources(page)
-                ?: return emptyList<ExtractorLink>() to emptyList()
+            // A playlist is only handed to the player once it really answers:
+            // the drive fetch behind a worker fails now and then, and a dead url
+            // reaches ExoPlayer as a black screen with error 2004.
+            val direct = directPlaylist(page)
+            val listed = direct?.let { url ->
+                listOf(Playable(url, null, true)).takeIf { playlistOk(url) }
+            } ?: encodeSources(page) ?: return emptyList<ExtractorLink>() to emptyList()
 
             val links = listed.mapNotNull { source ->
                 runCatching {
@@ -356,12 +360,20 @@ class MovieNestBDProvider : MainAPI() {
         return found?.trim()?.takeUnless { it.isEmpty() || it == "null" }
     }
 
+    /** True when the url really answers with an HLS playlist (not a 403/500 page). */
+    private suspend fun playlistOk(url: String): Boolean = runCatching {
+        app.get(url, headers = HEADERS, timeout = TIMEOUT).text.trimStart().startsWith("#EXTM3U")
+    }.getOrDefault(false)
+
     /**
      * The encode worker answers either
      *   { "status": "success", "hls": "https://.../hls/<token>" }
-     * or, on newer builds, a per quality map
+     * or, on some builds, a per quality map
      *   { "status": "success", "video": { "1080p": "https://...mp4", ... } }
-     * Workers change per title, so they are tried in the page's own order.
+     * The status field says success even when the Google Drive fetch behind the
+     * worker failed (the playlist then answers 500), so every candidate is
+     * loaded before it is handed out and the next worker is tried on failure.
+     * Workers change per title, so they are taken from the page in its own order.
      */
     private suspend fun encodeSources(page: String): List<Playable>? {
         val drive = DRIVE_ID.find(page)?.groupValues?.get(1)?.trim()
@@ -374,36 +386,46 @@ class MovieNestBDProvider : MainAPI() {
             .toList()
         if (workers.isEmpty()) return null
 
-        val body = MAPPER.writeValueAsString(mapOf("driveid" to drive)).toRequestBody(JSON_MEDIA)
-        for (worker in workers) {
-            val answer = runCatching {
-                app.post("$worker/api/encode", requestBody = body, headers = HEADERS, timeout = TIMEOUT).text
-            }.getOrNull() ?: continue
-            val node = runCatching { MAPPER.readTree(answer) }.getOrNull() ?: continue
-            if (node.path("status").asText() != "success") continue
-
-            val out = mutableListOf<Playable>()
-            val video = node.get("video")
-            if (video != null && video.isObject) {
-                video.fieldNames().forEach { quality ->
-                    val url = video.get(quality)?.asText()?.trim()
-                    if (!url.isNullOrEmpty()) {
-                        out.add(Playable(url, quality.uppercase(), url.contains(".m3u8", true)))
-                    }
+        // First pass walks every worker; the second retries the two first ones,
+        // because the same drive usually encodes fine a few seconds later.
+        for (pass in 0 until 2) {
+            for (worker in if (pass == 0) workers else workers.take(2)) {
+                for (candidate in encodeAt(worker, drive)) {
+                    if (playlistOk(candidate.url)) return listOf(candidate)
                 }
             }
-            if (out.isEmpty()) {
-                for (field in PLAYLIST_FIELDS) {
-                    val url = node.get(field)?.asText()?.trim()
-                    if (!url.isNullOrEmpty() && url != "null") {
-                        out.add(Playable(url, null, true))
-                        break
-                    }
-                }
-            }
-            if (out.isNotEmpty()) return out
         }
         return null
+    }
+
+    private suspend fun encodeAt(worker: String, drive: String): List<Playable> {
+        val body = MAPPER.writeValueAsString(mapOf("driveid" to drive)).toRequestBody(JSON_MEDIA)
+        val answer = runCatching {
+            app.post("$worker/api/encode", requestBody = body, headers = HEADERS, timeout = TIMEOUT).text
+        }.getOrNull() ?: return emptyList()
+        val node = runCatching { MAPPER.readTree(answer) }.getOrNull() ?: return emptyList()
+        if (node.path("status").asText() != "success") return emptyList()
+
+        val out = mutableListOf<Playable>()
+        val video = node.get("video")
+        if (video != null && video.isObject) {
+            video.fieldNames().forEach { quality ->
+                val url = video.get(quality)?.asText()?.trim()
+                if (!url.isNullOrEmpty()) {
+                    out.add(Playable(url, quality.uppercase(), url.contains(".m3u8", true)))
+                }
+            }
+        }
+        if (out.isEmpty()) {
+            for (field in PLAYLIST_FIELDS) {
+                val url = node.get(field)?.asText()?.trim()
+                if (!url.isNullOrEmpty() && url != "null") {
+                    out.add(Playable(url, null, true))
+                    break
+                }
+            }
+        }
+        return out
     }
 
     private suspend fun subtitles(page: String): List<SubtitleFile> {
@@ -447,7 +469,7 @@ class MovieNestBDProvider : MainAPI() {
 
         const val PROXY = "https://r.jina.ai/"
         const val PROXY_TIMEOUT = 40L
-        const val MAX_WORKERS = 3
+        const val MAX_WORKERS = 5
 
         val PROXY_HEADERS = mapOf(
             "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
