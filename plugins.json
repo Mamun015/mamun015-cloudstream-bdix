@@ -129,10 +129,10 @@
     },
     {
         "iconUrl": "https://movienestbd.best/favicon.png",
-        "fileHash": "sha256-fd50d8248ad0a6772df678ba92b9646ad1eddff8a46dc8b66f22d1be78043901",
+        "fileHash": "sha256-c08eba0637134f6287c976eee07b55ab5ebb7b05838c1c45a8be91c900747fd2",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Mamun015/mamun015-cloudstream-bdix",
-        "fileSize": 32542,
+        "fileSize": 31445,
         "status": 1,
         "language": "en",
         "authors": [
@@ -148,7 +148,7 @@
             "Documentary",
             "Others"
         ],
-        "version": 4,
+        "version": 5,
         "internalName": "Movienestbd",
         "description": "MovieNestBD. Movies, web series and anime in many languages, with direct HLS links.",
         "url": "https://raw.githubusercontent.com/Mamun015/mamun015-cloudstream-bdix/builds/Movienestbd.cs3",
